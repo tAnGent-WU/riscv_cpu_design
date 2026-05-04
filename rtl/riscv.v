@@ -4,23 +4,29 @@ module risv(clk, rst);
     input clk,rst;
 
     wire RFWrite, DMCtrl, PCWrite, IRWrite, InsMemRW, ExtSel, zero, ALUSrcA;
+    wire RFWrite_r1, RFWrite_r2, DMCtrl_r1;
+    wire Flush;
     wire [1:0] ALUSrcB;
     wire [1:0] NPCOp, WDSel, RegSel;
+    wire [1:0] WDSel, WDSel_r1, WDSel_r2;
     wire [3:0] ALUOp;
-    wire [6:0] opcode;
-    wire [2:0] Funct3;
-    wire [6:0] Funct7;
-    wire [31:0] PC, NPC, PCA4;
+    wire [6:0] opcode, opcode_r;
+    wire [2:0] Funct3, Funct3_r;
+    wire [6:0] Funct7, Funct7_r;
+    wire [31:0] PC, PC_r1, PC_r2, PC_r3; 
+    wire [31:0] NPC;
+    wire [31:0] PCA4, PCA4_r1, PCA4_r2, PCA4_r3, PCA4_r4;
     wire [31:0] in_ins, out_ins, RD, DR_out;
-    wire [4:0] rs1, rs2, rd;
+    wire [4:0] rs1, rs2, rd, rs1_r, rs2_r, rd_r;
     wire [11:0] Imm12;
-    wire [11:0] Imm32;
-    wire [20:1] Offset20;
-    wire [11:0] Offset;
-    wire [4:0] WR;
+    wire [31:0] Imm32, Imm32_r;
+    wire [20:1] Offset20, Offset20_r1, Offset20_r2;
+    wire [11:0] Offset, Offset_r1, Offset_r2;
+    wire [4:0] WR, WR_r1, WR_r2;
     wire [31:0] WD;
-    wire [31:0] RD1, RD1_r, RD2, RD2_r;
-    wire [31:0] A, B, ALU_result, ALU_result_r;
+    wire [31:0] RD1, RD1_r, RD1_r1,
+    wire [31:0] RD2, RD2_r, RD2_r1;
+    wire [31:0] A_r, B_r, ALU_result, ALU_result_r, ALU_result_r1;
 
     assign opcode   = out_ins[6:0];
     assign Funct3   = out_ins[14:12];
@@ -34,140 +40,89 @@ module risv(clk, rst);
                       (opcode == `INSTR_SW_OP)    ? {out_ins[31:25],out_ins[11:7]}                        : Imm12;     
 
     ControlUnit U_ControlUnit(
-        .clk(clk),
-        .rst(rst),
-        .zero(zero),
-        .opcode(opcode),
-        .Funct7(Funct7),
-        .Funct3(Funct3),
-        .RFWrite(RFWrite),
-        .DMCtrl(DMCtrl),
-        .PCWrite(PCWrite),
-        .IRWrite(IRWrite),
-        .InsMemRW(InsMemRW),
-        .WDSel(WDSel),
-        .ExtSel(ExtSel),
-        .ALUOp(ALUOp),
-        .NPCOp(NPCOp),
-        .ALUSrcA(ALUSrcA),
-        .ALUSrcB(ALUSrcB),
-        .RegSel(RegSel)
+        .clk(clk), .rst(rst), .opcode(opcode), .Funct7(Funct7), .Funct3(Funct3), .PCWrite(PCWrite), .InsMemRW(InsMemRW), 
+        .IRWrite(IRWrite), .RFWrite(RFWrite), .DMCtrl(DMCtrl), .ExtSel(ExtSel), .ALUSrcA(ALUSrcA), .ALUSrcB(ALUSrcB),
+        .RegSel(RegSel), .WDSel(WDSel), .ALUOp(ALUOp), //ControlUnit Logic
+        .rd(rd), .PCA4_r1(PCA4_r1), .PC_r1(PC_r1), .rd_r(rd_r), .opcode_r(opcode_r), .Funct3_r(Funct3_r), .Funct7_r(Funct7_r), 
+        .PC_r2(PC_r2), .PCA4_r2(PCA4_r2) //Flopr ID/EX
     );
 
     PC U_PC (
-        .clk(clk),
-        .rst(rst),
-        .PCWrite(PCWrite),
-        .NPC(NPC),
-        .PC(PC)
+        .clk(clk), .rst(rst), .PCWrite(PCWrite), .NPC(NPC), .PC(PC)
     );
 
     NPC U_NPC(
-        .PC(PC),
-        .NPCOp(NPCOp),
-        .Offset12(Offset),
-        .Offset20(Offset20),
-        .rs(RD1[31:2]),
-        .PCA4(PCA4),
-        .NPC(NPC)
+        .PC(PC), .NPCOp(NPCOp), .Offset12(Offset_r2), .Offset20(Offset20_r2), .rs(RD1[31:0]), .PCA4(PCA4),
+        .NPC(NPC), .PC_r3(PC_r3)
     );
 
     IM U_IM (
-        .addr(PC[11:2]),
-        .Ins(in_ins),
-        .InsMemRW(InsMemRW)
+        .clk(clk), .rst(rst), .PCA4(PCA4), .addr(PC[11:2]), .Ins(in_ins), .PCA4_r1(PCA4_r1), .InsMemRW(InsMemRW),
+        .PC(PC), .PC_r1(PC_r1) //Flopr IF/ID
     );
 
     IR U_IR (
-        .clk(clk),
-        .IRWrite(IRWrite),
-        .in_ins(in_ins),
-        .out_ins(out_ins)
+        .IRWrite(IRWrite), .in_ins(in_ins), .out_ins(out_ins), .Flush(Flush)
     );
 
     RF U_RF (
-        .RR1(rs1),
-        .RR2(rs2),
-        .WR(WR),
-        .WD(WD),
-        .clk(clk),
-        .RFWrite(RFWrite),
-        .RD1(RD1),
-        .RD2(RD2)
+        .RR1(rs1), .RR2(rs2), .WR(WR_r2), .WD(WD), .clk(clk),
+        .RFWrite(RFWrite_r2), .RD1(RD1), .RD2(RD2),
+        .RR1_r(rs1_r), .RR2_r(rs2_r) //Flopr ID/EX
     );
 
     MUX_3to1 U_MUX_3to1 (
-        .X(rd),
-        .Y(5'd0),
-        .Z(5'd31),
-        .control(RegSel),
-        .out(WR)
+        .X(rd_r), .Y(5'd0), .Z(5'd31),
+        .control(RegSel), .out(WR)
     );
 
     MUX_3to1_LMD U_MUX_3to1_LMD (
-        .X(ALU_result_r),
-        .Y(DR_out),
-        .Z(PCA4),
-        .control(WDSel),
-        .out(WD)
+        .X(ALU_result_r1), .Y(DR_out), .Z(PCA4_r4),
+        .control(WDSel_r2), .out(WD)
     );
 
     Flopr U_A (
-        .clk(clk),
-        .rst(rst),
-        .in_data(RD1),
-        .out_data(RD1_r)
+        .clk(clk), .rst(rst), .in_data(RD1), .out_data(RD1_r)
     );
 
     Flopr U_B (
-        .clk(clk),
-        .rst(rst),
-        .in_data(RD2),
-        .out_data(RD2_r)
+        .clk(clk), .rst(rst), .in_data(RD2), .out_data(RD2_r)
     );
 
     EXT U_EXT (
-        .imm_in(Imm12),
-        .ExtSel(ExtSel),
-        .imm_out(Imm32)
+        .clk(clk), .imm_in(Imm12), .ExtSel(ExtSel), .imm_out(Imm32),
+        .Offset(Offset), .Offset_r1(Offset_r1), .Offset20(Offset20), .Offset20_r1(Offset20_r1) //Flopr ID
     );
 
     MUX_2to1_A U_MUX_2to1_A (
-        .X(RD1_r),
-        .Y(32'h0),
-        .control(ALUSrcA),
-        .out(A)
+        .X(RD1_r), .Y(5'd0), .control(ALUSrcA), .out(A_r)
     );
 
     MUX_3to1_B U_MUX_3to1_B (
-        .X(RD2_r),
-        .Y(Imm32),
-        .Z(Offset),
-        .control(ALUSrcB),
-        .out(B)
+        .X(RD2_r), .Y(Imm32), .Z(Offset_r1), .control(ALUSrcB), .out(B_r)
     );
 
     ALU U_ALU (
-        .A(A),
-        .B(B),
-        .ALUOp(ALUOp),
-        .ALU_result(ALU_result),
-        .zero(zero)
+        .clk(clk), .rst(rst), .opcode_r(opcode_r), .Funct7_r(Funct7_r), .Funct3_r(Funct3_r), .NPCOp(NPCOp),
+        .Flush(Flush), //determine when to flush ControlUnit, DM, ALU
+        .RFWrite(RFWrite), .DMCtrl(DMCtrl), .WR(WR), .WDSel(WDSel), .RD2_r(RD2_r), .RD1_r(RD1_r), .PCA4_r2(PCA4_r2),
+        .Offset_r1(Offset_r1), .Offset20_r1(Offset20_r1), .PC_r2(PC_r2), .RFWrite_r1(RFWrite_r1), .DMCtrl_r1(DMCtrl_r1), 
+        .WR_r1(WR_r1), .WDSel_r1(WDSel_r1), .RD1_r1(RD1_r1), .RD2_r1(RD2_r1), .PCA4_r3(PCA4_r3), .Offset_r2(Offset_r2), 
+        .Offset20_r2(Offset20_r2), .PC_r3(PC_r3), //Flopr EX/MEM
+        .RFWrite_r2(RFWrite_r2), .WR_r2(WR_r2), .RR1(rs1_r), .RR2(rs2_r), .ALUSrcB(ALUSrcB), .WD(WD), .ALU_result_r(ALU_result_r),
+        .A_r(A_r), .B_r(B_r), //when and what to pass forward
+        .ALUOp(ALUOp), .zero(zero), .ALU_result(ALU_result)
     );
 
     Flopr U_ALUOut (
-        .clk(clk),
-        .rst(rst),
-        .in_data(ALU_result),
-        .out_data(ALU_result_r)
+        .clk(clk), .rst(rst), .in_data(ALU_result), .out_data(ALU_result_r)
     );
 
     DM U_DM (
-        .Addr(ALU_result_r[11:2]),
-        .WD(RD2_r),
-        .DMCtrl(DMCtrl),
-        .clk(clk),
-        .RD(RD)
+        .rst(rst), .Addr(ALU_result_r[11:2]), .clk(clk), .WD(RD2_r1), .DMCtrl_r1(DMCtrl_r1), .RD(RD),
+        .RFWrite_r1(RFWrite_r1), .WDSel_r1(WDSel_r1), .WR_r1(WR_r1), .PCA4_r3(PCA4_r3), .ALU_result_r(ALU_result_r),
+        .RFWrite_r2(RFWrite_r2), .WDSel_r2(WDSel_r2), .WR_r2(WR_r2), .PCA4_r4(PCA4_r4), .ALU_result_r1(ALU_result_r1), //Flopr MEM/WB
+        .Flush(Flush)
     );
 
     //Flopr U_DR (

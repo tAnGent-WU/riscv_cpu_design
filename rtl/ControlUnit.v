@@ -6,7 +6,6 @@
 module ControlUnit (
     input rst,              //
     input clk,              //
-    input zero,             //
     input [6:0] opcode,     //
     input [6:0] Funct7,     //
     input [2:0] Funct3,     //
@@ -19,24 +18,32 @@ module ControlUnit (
     output reg ALUSrcA,     //
     output reg [1:0] ALUSrcB,
     output reg [1:0] RegSel,
-    output reg [1:0] NPCOp,
     output reg [1:0] WDSel,
-    output reg [3:0] ALUOp
+    output reg [3:0] ALUOp, //ControlUnit Logic
+
+    input [4:0] rd,
+    input [31:0] PCA4_r1,
+    input [31:0] PC_r1,
+    output reg [4:0] rd_r,
+    output reg [6:0] opcode_r,
+    output reg [2:0] Funct3_r,
+    output reg [6:0] Funct7_r,
+    output reg [31:0] PC_r2,
+    output reg [31:0] PCA4_r2 //Flopr ID
 );
     always @(posedge clk or posedge rst) begin
         if (rst) begin
-        PCWrite  <= 1'b1;
-        InsMemRW <= 1'b1;
-        IRWrite  <= 1'b1;
-        RFWrite  <= 1'b1;
-        DMCtrl   <= `DMCtrl_RD;
-        ExtSel   <= `ExtSel_ZERO;
-        ALUSrcA  <= `ALUSrcA_A;
-        ALUSrcB  <= `ALUSrcB_B;
-        RegSel   <= `RegSel_else;
-        NPCOp    <= `NPC_PC;
-        WDSel    <= `WDSel_Else;
-        ALUOp    <= `ALUOp_ADD;
+            PCWrite  <= 1'b1;
+            InsMemRW <= 1'b1;
+            IRWrite  <= 1'b1;
+            RFWrite  <= 1'b0;
+            DMCtrl   <= `DMCtrl_RD;
+            ExtSel   <= `ExtSel_ZERO;
+            ALUSrcA  <= `ALUSrcA_A;
+            ALUSrcB  <= `ALUSrcB_B;
+            RegSel   <= `RegSel_else;
+            WDSel    <= `WDSel_Else;
+            ALUOp    <= `ALUOp_ADD;
         end
         else begin
         case (opcode)
@@ -50,7 +57,6 @@ module ControlUnit (
                 ALUSrcA  <= `ALUSrcA_A;
                 ALUSrcB  <= `ALUSrcB_B;
                 RegSel   <= `RegSel_rd;
-                NPCOp    <= `NPC_PC;
                 WDSel    <= `WDSel_FromALU;
                 case({Funct7,Funct3})
                     `INSTR_ADD_FUNCT: ALUOp <= `ALUOp_ADD;
@@ -74,7 +80,6 @@ module ControlUnit (
                 ALUSrcA  <= `ALUSrcA_A;
                 ALUSrcB  <= `ALUSrcB_Imm;
                 RegSel   <= `RegSel_rd;
-                NPCOp    <= `NPC_PC;
                 WDSel    <= `WDSel_FromALU;
                 case(Funct3)
                     `INSTR_ADDI_FUNCT: ALUOp <= `ALUOp_ADD;
@@ -94,10 +99,6 @@ module ControlUnit (
                 RegSel   <= `RegSel_else;
                 WDSel    <= `WDSel_Else;
                 ALUOp    <= `ALUOp_BR;
-                if (Funct3 == `INSTR_BEQ_FUNCT & zero)
-                    NPCOp <= `NPC_Offset12;
-                else
-                    NPCOp <= `NPC_PC;
             end
             `INSTR_LW_OP: begin //Load (use addition to calculate the address)
                 PCWrite  <= 1'b1;
@@ -109,7 +110,6 @@ module ControlUnit (
                 ALUSrcA  <= `ALUSrcA_A;
                 ALUSrcB  <= `ALUSrcB_Imm;
                 RegSel   <= `RegSel_rd;
-                NPCOp    <= `NPC_PC;
                 WDSel    <= `WDSel_FromMEM;
                 ALUOp    <= `ALUOp_ADD;
             end
@@ -123,7 +123,6 @@ module ControlUnit (
                 ALUSrcA  <= `ALUSrcA_A;
                 ALUSrcB  <= `ALUSrcB_Offset;
                 RegSel   <= `RegSel_else;
-                NPCOp    <= `NPC_PC;
                 WDSel    <= `WDSel_Else;
                 ALUOp    <= `ALUOp_ADD;
             end
@@ -137,7 +136,6 @@ module ControlUnit (
                 ALUSrcA  <= `ALUSrcA_A;
                 ALUSrcB  <= `ALUSrcB_Offset;
                 RegSel   <= `RegSel_31;
-                NPCOp    <= `NPC_Offset20;
                 WDSel    <= `WDSel_FromPC;
                 ALUOp    <= `ALUOp_ADD;
             end
@@ -151,12 +149,42 @@ module ControlUnit (
                 ALUSrcA  <= `ALUSrcA_A;
                 ALUSrcB  <= `ALUSrcB_Offset;
                 RegSel   <= `RegSel_rd;
-                NPCOp    <= `NPC_rs;
                 WDSel    <= `WDSel_FromPC;
                 ALUOp    <= `ALUOp_ADD;
             end
-            default;
+            default: begin
+                PCWrite  <= 1'b1;
+                InsMemRW <= 1'b1;
+                IRWrite  <= 1'b1;
+                RFWrite  <= 1'b1;
+                DMCtrl   <= `DMCtrl_RD;
+                ExtSel   <= `ExtSel_ZERO;
+                ALUSrcA  <= `ALUSrcA_A;
+                ALUSrcB  <= `ALUSrcB_B;
+                RegSel   <= `RegSel_rd;
+                WDSel    <= `WDSel_Else;
+                ALUOp    <= `ALUOp_ADD;
+            end
         endcase
+        end
+    end
+
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            PCA4_r2  <= 32'h0;
+            rd_r     <= 5'h0;
+            opcode_r <= 7'h0;
+            Funct3_r <= 3'h0;
+            Funct7_r <= 7'h0;
+            PC_r2    <= 32'h0;
+        end
+        else begin
+            PCA4_r2  <= PCA4_r1;
+            rd_r     <= rd;
+            opcode_r <= opcode;
+            Funct3_r <= Funct3;
+            Funct7_r <= Funct7;
+            PC_r2    <= PC_r1;
         end
     end
 

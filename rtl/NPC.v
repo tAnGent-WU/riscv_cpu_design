@@ -5,6 +5,7 @@ module NPC(
     Offset12,
     Offset20,
     PC,
+    PC_r3,
     rs,
     PCA4,
     NPC
@@ -14,6 +15,7 @@ module NPC(
     input [20:1] Offset20;
     input [31:0] PC;
     input [31:0] rs;
+    input [31:0] PC_r3;
     output reg [31:0] PCA4;
     output reg [31:0] NPC;
 
@@ -26,9 +28,9 @@ module NPC(
     always @(*) begin
         case(NPCOp)
             `NPC_PC         : NPC = PC + 4;
-            `NPC_Offset12   : NPC = $signed({1'b0,PC}) + $signed(Offset13);
+            `NPC_Offset12   : NPC = $signed({1'b0,PC_r3}) + $signed(Offset13);
             `NPC_rs         : NPC = rs;
-            `NPC_Offset20   : NPC = $signed({1'b0,PC}) + $signed(Offset21);
+            `NPC_Offset20   : NPC = $signed({1'b0,PC_r3}) + $signed(Offset21);
         endcase
         PCA4 = PC + 4;
     end
