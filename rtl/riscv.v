@@ -6,6 +6,7 @@ module risv(clk, rst);
     wire RFWrite, DMCtrl, PCWrite, IRWrite, InsMemRW, ExtSel, zero, ALUSrcA;
     wire RFWrite_r1, RFWrite_r2, DMCtrl_r1;
     wire Flush;
+    wire Stall;
     wire [1:0] ALUSrcB;
     wire [1:0] NPCOp, WDSel, RegSel;
     wire [1:0] WDSel, WDSel_r1, WDSel_r2;
@@ -19,7 +20,7 @@ module risv(clk, rst);
     wire [31:0] in_ins, out_ins, RD, DR_out;
     wire [4:0] rs1, rs2, rd, rs1_r, rs2_r, rd_r;
     wire [11:0] Imm12;
-    wire [31:0] Imm32, Imm32_r;
+    wire [31:0] Imm32;
     wire [20:1] Offset20, Offset20_r1, Offset20_r2;
     wire [11:0] Offset, Offset_r1, Offset_r2;
     wire [4:0] WR, WR_r1, WR_r2;
@@ -42,7 +43,7 @@ module risv(clk, rst);
     ControlUnit U_ControlUnit(
         .clk(clk), .rst(rst), .opcode(opcode), .Funct7(Funct7), .Funct3(Funct3), .PCWrite(PCWrite), .InsMemRW(InsMemRW), 
         .IRWrite(IRWrite), .RFWrite(RFWrite), .DMCtrl(DMCtrl), .ExtSel(ExtSel), .ALUSrcA(ALUSrcA), .ALUSrcB(ALUSrcB),
-        .RegSel(RegSel), .WDSel(WDSel), .ALUOp(ALUOp), //ControlUnit Logic
+        .RegSel(RegSel), .WDSel(WDSel), .ALUOp(ALUOp), .Stall(Stall), //ControlUnit Logic
         .rd(rd), .PCA4_r1(PCA4_r1), .PC_r1(PC_r1), .rd_r(rd_r), .opcode_r(opcode_r), .Funct3_r(Funct3_r), .Funct7_r(Funct7_r), 
         .PC_r2(PC_r2), .PCA4_r2(PCA4_r2) //Flopr ID/EX
     );
@@ -52,12 +53,12 @@ module risv(clk, rst);
     );
 
     NPC U_NPC(
-        .PC(PC), .NPCOp(NPCOp), .Offset12(Offset_r2), .Offset20(Offset20_r2), .rs(RD1[31:0]), .PCA4(PCA4),
+        .PC(PC), .NPCOp(NPCOp), .Offset12(Offset_r2), .Offset20(Offset20_r2), .rs(RD1_r1[31:0]), .PCA4(PCA4),
         .NPC(NPC), .PC_r3(PC_r3)
     );
 
     IM U_IM (
-        .clk(clk), .rst(rst), .PCA4(PCA4), .addr(PC[11:2]), .Ins(in_ins), .PCA4_r1(PCA4_r1), .InsMemRW(InsMemRW),
+        .clk(clk), .rst(rst), .PCA4(PCA4), .addr(PC[11:2]), .Ins(in_ins), .PCA4_r1(PCA4_r1), .InsMemRW(InsMemRW), .PCWrite(PCWrite),
         .PC(PC), .PC_r1(PC_r1) //Flopr IF/ID
     );
 
@@ -91,7 +92,7 @@ module risv(clk, rst);
 
     EXT U_EXT (
         .clk(clk), .imm_in(Imm12), .ExtSel(ExtSel), .imm_out(Imm32),
-        .Offset(Offset), .Offset_r1(Offset_r1), .Offset20(Offset20), .Offset20_r1(Offset20_r1) //Flopr ID
+        .Offset(Offset), .Offset_r1(Offset_r1), .Offset20(Offset20), .Offset20_r1(Offset20_r1) //Flopr ID/EX
     );
 
     MUX_2to1_A U_MUX_2to1_A (
@@ -105,11 +106,12 @@ module risv(clk, rst);
     ALU U_ALU (
         .clk(clk), .rst(rst), .opcode_r(opcode_r), .Funct7_r(Funct7_r), .Funct3_r(Funct3_r), .NPCOp(NPCOp),
         .Flush(Flush), //determine when to flush ControlUnit, DM, ALU
-        .RFWrite(RFWrite), .DMCtrl(DMCtrl), .WR(WR), .WDSel(WDSel), .RD2_r(RD2_r), .RD1_r(RD1_r), .PCA4_r2(PCA4_r2),
+        .RR1(rs1), .RR2(rs2), .opcode(opcode), .Stall(Stall), //determine when to stall the pipeline
+        .RFWrite(RFWrite), .DMCtrl(DMCtrl), .WR(WR), .WDSel(WDSel), .RD2_r(RD2_r), .RD1_r(RD1_r), .PCA4_r2(PCA4_r2), .PCWrite(PCWrite),
         .Offset_r1(Offset_r1), .Offset20_r1(Offset20_r1), .PC_r2(PC_r2), .RFWrite_r1(RFWrite_r1), .DMCtrl_r1(DMCtrl_r1), 
         .WR_r1(WR_r1), .WDSel_r1(WDSel_r1), .RD1_r1(RD1_r1), .RD2_r1(RD2_r1), .PCA4_r3(PCA4_r3), .Offset_r2(Offset_r2), 
         .Offset20_r2(Offset20_r2), .PC_r3(PC_r3), //Flopr EX/MEM
-        .RFWrite_r2(RFWrite_r2), .WR_r2(WR_r2), .RR1(rs1_r), .RR2(rs2_r), .ALUSrcB(ALUSrcB), .WD(WD), .ALU_result_r(ALU_result_r),
+        .RFWrite_r2(RFWrite_r2), .WR_r2(WR_r2), .RR1_r(rs1_r), .RR2_r(rs2_r), .ALUSrcB(ALUSrcB), .WD(WD), .ALU_result_r(ALU_result_r),
         .A_r(A_r), .B_r(B_r), //when and what to pass forward
         .ALUOp(ALUOp), .zero(zero), .ALU_result(ALU_result)
     );

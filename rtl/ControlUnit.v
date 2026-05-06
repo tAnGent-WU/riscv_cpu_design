@@ -19,7 +19,9 @@ module ControlUnit (
     output reg [1:0] ALUSrcB,
     output reg [1:0] RegSel,
     output reg [1:0] WDSel,
-    output reg [3:0] ALUOp, //ControlUnit Logic
+    output reg [3:0] ALUOp, //ControlUnit Logic0
+
+    input Stall,
 
     input [4:0] rd,
     input [31:0] PCA4_r1,
@@ -29,13 +31,26 @@ module ControlUnit (
     output reg [2:0] Funct3_r,
     output reg [6:0] Funct7_r,
     output reg [31:0] PC_r2,
-    output reg [31:0] PCA4_r2 //Flopr ID
+    output reg [31:0] PCA4_r2 //Flopr ID/EX
 );
     always @(posedge clk or posedge rst) begin
         if (rst) begin
             PCWrite  <= 1'b1;
             InsMemRW <= 1'b1;
             IRWrite  <= 1'b1;
+            RFWrite  <= 1'b0;
+            DMCtrl   <= `DMCtrl_RD;
+            ExtSel   <= `ExtSel_ZERO;
+            ALUSrcA  <= `ALUSrcA_A;
+            ALUSrcB  <= `ALUSrcB_B;
+            RegSel   <= `RegSel_else;
+            WDSel    <= `WDSel_Else;
+            ALUOp    <= `ALUOp_ADD;
+        end
+        else if (Stall) begin
+            PCWrite  <= 1'b0;
+            InsMemRW <= 1'b0;
+            IRWrite  <= 1'b0;
             RFWrite  <= 1'b0;
             DMCtrl   <= `DMCtrl_RD;
             ExtSel   <= `ExtSel_ZERO;
@@ -135,7 +150,7 @@ module ControlUnit (
                 ExtSel   <= `ExtSel_SIGNED;
                 ALUSrcA  <= `ALUSrcA_A;
                 ALUSrcB  <= `ALUSrcB_Offset;
-                RegSel   <= `RegSel_31;
+                RegSel   <= `RegSel_rd;
                 WDSel    <= `WDSel_FromPC;
                 ALUOp    <= `ALUOp_ADD;
             end
@@ -176,7 +191,6 @@ module ControlUnit (
             opcode_r <= 7'h0;
             Funct3_r <= 3'h0;
             Funct7_r <= 7'h0;
-            PC_r2    <= 32'h0;
         end
         else begin
             PCA4_r2  <= PCA4_r1;
@@ -184,7 +198,15 @@ module ControlUnit (
             opcode_r <= opcode;
             Funct3_r <= Funct3;
             Funct7_r <= Funct7;
-            PC_r2    <= PC_r1;
+        end
+    end
+
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            PC_r2 <= 32'h0;
+        end
+        else if (PCWrite) begin
+            PC_r2 <=PC_r1;
         end
     end
 

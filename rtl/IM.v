@@ -30,7 +30,7 @@ module IM(
             PC_r1   <= 32'h0;
             PCA4_r1 <= 32'h0;
         end
-        else begin
+        else if (PCWrite) begin
             PC_r1   <= PC;
             PCA4_r1 <= PCA4;
         end

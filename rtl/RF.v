@@ -4,14 +4,16 @@
 module RF(
     input  [4:0]  RR1,      // 读寄存器1地址 (rs1)
     input  [4:0]  RR2,      // 读寄存器2地址 (rs2)
-    input  [4:0]  WR_ini,       // 写寄存器地址 (rd)
-    input  [4:0]  WR,
+    input  [4:0]  WR,       // 写寄存器地址 (rd)
     input  [31:0] WD,       // 写寄存器数据 (Write Data)
+    input  [6:0] opcode,
+    input  [6:0] opcode_r,
     input         RFWrite,  // 寄存器堆写使能信号
     input         clk,      // 时钟信号
     output [31:0] RD1,      // 读出的数据1
     output [31:0] RD2,       // 读出的数据2
-    output reg [4:0] WR_r1
+    output reg [4:0] RR1_r,
+    output reg [4:0] RR2_r
 );
 
     // 定义 32 个 32 位的通用寄存器
@@ -43,7 +45,14 @@ module RF(
     assign RD2 = (RFWrite && (WR != 0) && (WR == RR2)) ? WD : register[RR2];
 
     always @(posedge clk) begin
-        WR_r1 <= WR_ini;
+        if (rst) begin
+            RR1_r <= 5'h0;
+            RR2_r <= 5'h0;
+        end
+        else begin
+            RR1_r <= RR1;
+            RR2_r <= RR2;
+        end
     end
 
 endmodule

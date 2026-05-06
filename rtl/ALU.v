@@ -13,6 +13,7 @@ module ALU (
 
     input RFWrite, 
     input DMCtrl, 
+    input PCWrite,
     input [4:0] WR, 
     input [1:0] WDSel, 
     input [31:0] RD2_r,
@@ -30,12 +31,17 @@ module ALU (
     output reg [31:0] PCA4_r3,
     output reg [11:0] Offset_r2,
     output reg [20:1] Offset20_r2,
-    output reg [31:0] PC_r3,  //Flopr EX
+    output reg [31:0] PC_r3,  //Flopr EX/MEM
+
+    input [4:0] RR1,
+    input [4:0] RR2,
+    input [6:0] opcode,
+    output reg Stall, //for load-use issue
 
     input RFWrite_r2,
     input [4:0] WR_r2,
-    input [4:0] RR1,
-    input [4:0] RR2,
+    input [4:0] RR1_r,
+    input [4:0] RR2_r,
     input [1:0] ALUSrcB,
     input [31:0] WD,
     input [31:0] ALU_result_r,
@@ -51,10 +57,10 @@ module ALU (
     reg [31:0] RD2_temp;
 
     always @(*) begin
-        if (RFWrite_r1 && (WR_r1 == RR1) && (WR_r1 != 0) && (RR1 != 0)) begin
+        if (RFWrite_r1 && (WR_r1 == RR1_r) && (WR_r1 != 0) && (RR1_r != 0)) begin
             A = ALU_result_r;
         end
-        else if (RFWrite_r2 && (WR_r2 == RR1) && (WR_r2 != 0) && (RR1 != 0)) begin
+        else if (RFWrite_r2 && (WR_r2 == RR1_r) && (WR_r2 != 0) && (RR1_r != 0)) begin
             A = WD;
         end
         else begin
@@ -63,12 +69,12 @@ module ALU (
     end
 
     always @(*) begin
-        if (RFWrite_r1 && (WR_r1 == RR2) && (WR_r1 != 0) && 
-        (RR2 != 0) && (ALUSrcB == `ALUSrcB_B)) begin
+        if (RFWrite_r1 && (WR_r1 == RR2_r) && (WR_r1 != 0) && 
+        (RR2_r != 0) && (ALUSrcB == `ALUSrcB_B)) begin
             B = ALU_result_r;
         end
-        else if (RFWrite_r2 && (WR_r2 == RR2) && (WR_r2 != 0) && 
-        (RR2 != 0) && (ALUSrcB == `ALUSrcB_B)) begin
+        else if (RFWrite_r2 && (WR_r2 == RR2_r) && (WR_r2 != 0) && 
+        (RR2_r != 0) && (ALUSrcB == `ALUSrcB_B)) begin
             B = WD;
         end
         else begin
@@ -77,10 +83,10 @@ module ALU (
     end
 
     always @(*) begin
-        if (RFWrite_r1 && (WR_r1 == RR2) && (WR_r1 != 0) && (RR2 != 0)) begin
+        if (RFWrite_r1 && (WR_r1 == RR2_r) && (WR_r1 != 0) && (RR2_r != 0)) begin
             RD2_temp = ALU_result_r;
         end
-        else if (RFWrite_r2 && (WR_r2 == RR2) && (WR_r2 != 0) && (RR2 != 0)) begin
+        else if (RFWrite_r2 && (WR_r2 == RR2_r) && (WR_r2 != 0) && (RR2_r != 0)) begin
             RD2_temp = WD;
         end
         else begin
@@ -130,6 +136,11 @@ module ALU (
         Flush <= (NPCOp != `NPC_PC);
     end
 
+    always @(*) begin
+        Stall = (opcode_r == `INSTR_LW_OP) && (opcode != `INSTR_JAL_OP) && 
+                ((WR == RR1) || (WR == RR2)) && (WR != 5'b0);
+    end
+
     always @(posedge clk or posedge rst) begin
         if (rst || Flush) begin
             RFWrite_r1    <= 1'b0;
@@ -157,6 +168,13 @@ module ALU (
         end
     end
 
-
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            PC_r3 <= 32'h0;
+        end
+        else if (PCWrite) begin
+            PC_r3 <= PC_r2;
+        end
+    end
 
 endmodule
